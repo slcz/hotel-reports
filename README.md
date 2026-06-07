@@ -30,6 +30,14 @@ cd ~/.config/opencode/browser-use-project
 uv sync
 ```
 
+Set environment variables:
+
+```bash
+export DEEPSEEK_KEY="sk-..."
+export BROWSER_USE_KEY="bu_..."
+export GITHUB_TOKEN="ghp_..."
+```
+
 ## Usage
 
 ### Web App
