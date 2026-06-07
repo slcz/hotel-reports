@@ -1,0 +1,15 @@
+[project]
+name = "browser-use-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "browser-use>=0.12.9",
+    "langchain-openai>=1.1.9",
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "python-multipart",
+    "sse-starlette",
+]

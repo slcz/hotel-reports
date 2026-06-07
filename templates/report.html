@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .card { border: none; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 2rem; }
+        .hotel-img { width: 100%; height: 250px; object-fit: cover; border-radius: 8px 8px 0 0; }
+        .hotel-img-placeholder { width: 100%; height: 250px; background: #e9ecef; display: flex; align-items: center; justify-content: center; color: #6c757d; border-radius: 8px 8px 0 0; }
+        .badge-rating { font-size: 1rem; }
+    </style>
+</head>
+<body>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div id="loading-section" class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
+                <h4 id="progress-text">Preparing report...</h4>
+                <p class="text-muted">This may take a few minutes</p>
+                <div class="progress mt-3" style="height:6px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+                </div>
+            </div>
+            <div id="error-section" class="d-none text-center py-5">
+                <div class="text-danger mb-3" style="font-size:3rem;">&#9888;</div>
+                <h4>Report Generation Failed</h4>
+                <p id="error-text" class="text-muted"></p>
+                <a href="/" class="btn btn-primary mt-3">Start Over</a>
+            </div>
+            <div id="report-section" class="d-none">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div><h2 id="report-title">Hotel Report</h2><p id="report-subtitle" class="text-muted"></p></div>
+                    <a href="/" class="btn btn-outline-primary">New Search</a>
+                </div>
+                <div id="report-cards"></div>
+
+                <!-- GitHub Save -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h5 class="mb-3">Save to GitHub</h5>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label small">Repository (owner/name)</label>
+                                <input type="text" id="github-repo" class="form-control" placeholder="e.g. sileizhang/hotel-reports">
+                            </div>
+                            <div class="col-md-3">
+                                <button id="github-btn" class="btn btn-dark" onclick="saveToGitHub()">
+                                    Save to GitHub
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <div id="github-msg" class="small"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+const taskId = "{{ task_id }}";
+let reportData = null;
+
+async function poll() {
+    try {
+        const resp = await fetch(`/report-status/${taskId}`);
+        if (!resp.ok) { setTimeout(poll, 2000); return; }
+        const task = await resp.json();
+        document.getElementById("progress-text").textContent = task.progress;
+
+        if (task.total && task.total > 0) {
+            const pct = Math.min(95, ((task.current + 1) / task.total) * 100);
+            document.getElementById("progress-bar").style.width = pct + "%";
+        }
+
+        if (task.status === "done") {
+            document.getElementById("progress-bar").style.width = "100%";
+            setTimeout(() => {
+                document.getElementById("loading-section").classList.add("d-none");
+                show(task.result);
+            }, 300);
+            return;
+        }
+        if (task.status === "error") {
+            document.getElementById("loading-section").classList.add("d-none");
+            document.getElementById("error-section").classList.remove("d-none");
+            document.getElementById("error-text").textContent = task.error || "Unknown error";
+            return;
+        }
+        setTimeout(poll, 2000);
+    } catch (e) {
+        setTimeout(poll, 3000);
+    }
+}
+
+function show(data) {
+    reportData = data;
+    document.getElementById("report-section").classList.remove("d-none");
+    document.getElementById("report-subtitle").textContent =
+        `${data.location || ""} | ${data.check_in || ""} ~ ${data.check_out || ""} | ${data.hotels.length} hotels`;
+
+    const container = document.getElementById("report-cards");
+    data.hotels.forEach((h, i) => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const imgHtml = h.image
+            ? `<img src="${h.image}" class="hotel-img" alt="${h.name}">`
+            : `<div class="hotel-img-placeholder">No image available</div>`;
+
+        const featureBadges = (h.features || [])
+            .map(f => `<span class="badge bg-primary me-1">${f}</span>`).join(" ") || "";
+
+        const websiteBtn = h.website && h.website !== "N/A"
+            ? `<a href="${h.website}" target="_blank" class="btn btn-outline-primary btn-sm">Visit Website</a>` : "";
+
+        card.innerHTML = `
+            ${imgHtml}
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h4 class="card-title mb-0">${i+1}. ${h.name}</h4>
+                    <span class="badge bg-warning text-dark badge-rating">${h.rating} / 5</span>
+                </div>
+                <p class="text-muted mb-2">${h.star_class || ""} | ${h.distance || ""} from center</p>
+                <h5 class="text-primary mb-3">${h.currency || "$"} ${Math.round(h.price || 0)} / night</h5>
+                ${h.address ? `<p class="mb-1"><strong>Address:</strong> ${h.address}</p>` : ""}
+                ${websiteBtn}
+                ${featureBadges ? `<div class="mt-3">${featureBadges}</div>` : ""}
+            </div>`;
+        container.appendChild(card);
+    });
+}
+
+async function saveToGitHub() {
+    const repo = document.getElementById("github-repo").value.trim();
+    if (!repo) { alert("Please enter a repository (e.g. owner/name)."); return; }
+    if (!reportData || !reportData.hotels) { alert("No report data."); return; }
+
+    const btn = document.getElementById("github-btn");
+    const msg = document.getElementById("github-msg");
+    btn.disabled = true;
+    btn.textContent = "Saving...";
+    msg.innerHTML = "";
+
+    try {
+        const form = new FormData();
+        form.append("repo", repo);
+        form.append("hotels", JSON.stringify(reportData.hotels));
+        form.append("location", reportData.location || "");
+        form.append("check_in", reportData.check_in || "");
+        form.append("check_out", reportData.check_out || "");
+
+        const resp = await fetch("/save-to-github", { method: "POST", body: form });
+        const result = await resp.json();
+        if (result.ok) {
+            msg.innerHTML = `<a href="${result.url}" target="_blank" class="text-success">View Report</a>`;
+        } else {
+            msg.innerHTML = `<span class="text-danger">${result.error}</span>`;
+        }
+    } catch (e) {
+        msg.innerHTML = `<span class="text-danger">${e.message}</span>`;
+    }
+    btn.disabled = false;
+    btn.textContent = "Save to GitHub";
+}
+
+poll();
+</script>
+</body>
+</html>
